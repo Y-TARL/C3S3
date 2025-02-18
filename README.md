@@ -1,1 +1,1 @@
-# This code is part of the main code, and the complete code will be published on Github later.
+# The code for the paper "C3S3: Complementary Competition and Contrastive Selection for Semi-Supervised Medical Image Segmentation".
