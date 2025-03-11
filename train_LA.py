@@ -23,33 +23,39 @@ from utils import ramps, losses
 from dataloaders.LA_Data import LA_Heart_Dataset, RandomCrop, ToTensor, TwoStreamBatchSampler, RandomRotFlip
 
 parser = argparse.ArgumentParser()
-# parser.add_argument('--root_path', type=str, default='../dataset/LA/LA_Data', help='Name of Experiment')
-parser.add_argument('--root_path', type=str, default='dataset/LA', help='Name of Experiment')
-parser.add_argument('--exp', type=str, default="C3S3", help='model_name')
-parser.add_argument('--max_iterations', type=int, default=6000, help='maximum epoch number to train')
+parser.add_argument('--root_path', type=str, default='../dataset/LA/LA_Data/', help='Name of Experiment')
+parser.add_argument('--exp', type=str, default="LA", help='model_name')
+parser.add_argument('--max_iterations', type=int, default=2500, help='maximum epoch number to train')
 parser.add_argument('--batch_size', type=int, default=2, help='batch_size per gpu')
 parser.add_argument('--labeled_bs', type=int, default=1, help='labeled_batch_size per gpu')
 parser.add_argument('--base_lr', type=float, default=0.01, help='maximum epoch number to train')
 parser.add_argument('--deterministic', type=int, default=1, help='whether use deterministic training')
 parser.add_argument('--seed', type=int, default=1337, help='random seed')
-parser.add_argument('--gpu', type=str, default='4', help='GPU to use')
+parser.add_argument('--gpu', type=str, default='0', help='GPU to use')
+parser.add_argument('--alpha', type=float, default=0.2, help='alpha')
+# costs
 parser.add_argument('--ema_decay', type=float, default=0.999, help='ema_decay')
+
 parser.add_argument('--consistency_type', type=str, default="mse", help='consistency_type')
 parser.add_argument('--consistency', type=float, default=0.1, help='consistency')
+# 表示权重调整的时间
 parser.add_argument('--consistency_rampup', type=float, default=40.0, help='consistency_rampup')
 
 args = parser.parse_args()
 
-
 train_data_path = args.root_path
-snapshot_path = "checkpoints/" + args.exp + "/"
+snapshot_path = "./checkpoints/" + args.exp + "/"
 
-# torch.cuda.set_device(1)
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 batch_size = args.batch_size * len(args.gpu.split(','))
+# batch_size = args.batch_size
 max_iterations = args.max_iterations
 base_lr = args.base_lr
 labeled_bs = args.labeled_bs
+
+with open(args.root_path + '/../Flods/test0.list', 'r') as f:                                         # todo change test flod
+    image_list = f.readlines()
+image_list = [args.root_path +item.replace('\n', '')+"/mri_norm2.h5" for item in image_list]
 
 if args.deterministic:
     cudnn.benchmark = False
@@ -75,17 +81,26 @@ def sharpening(P):
     return P_sharpen
 
 
+# Dynamically adjust the weight used for consistency loss in semi-supervised learning
 def get_current_consistency_weight(epoch):
+    # Consistency ramp-up from https://arxiv.org/abs/1610.02242
     return args.consistency * ramps.sigmoid_rampup(epoch, args.consistency_rampup)
 
+# Update Exponential Moving Average
+
 def update_ema_variables(model, ema_model, alpha, global_step):
+    # Use the true average until the exponential average is more correct
     alpha = min(1 - 1 / (global_step + 1), alpha)
     for ema_param, param in zip(ema_model.parameters(), model.parameters()):
         ema_param.data.mul_(alpha).add_(1 - alpha, param.data)
 
+# Set random seed for each worker in the data loader to ensure that each worker produces the same randomness during data loading, thereby maintaining the reproducibility of training
+
+
 def worker_init_fn(worker_id):
     random.seed(args.seed+worker_id)
 
+# Function to perform operations on the input tensor vec to generate pairwise combined tensors
 def gateher_two_patch(vec):
     b, c, num = vec.shape
     cat_result = []
@@ -102,11 +117,12 @@ def gateher_two_patch(vec):
     return  result
 
 if __name__ == "__main__":
-    # if not os.path.exists(snapshot_path):
-    #     os.makedirs(snapshot_path)
-    # if os.path.exists(snapshot_path + '/code'):
-    #     shutil.rmtree(snapshot_path + '/code')
-    # shutil.copytree('.', snapshot_path + '/code', shutil.ignore_patterns(['.git', '__pycache__']))
+    # make logger file
+    if not os.path.exists(snapshot_path):
+        os.makedirs(snapshot_path)
+    if os.path.exists(snapshot_path + '/code'):
+        shutil.rmtree(snapshot_path + '/code')
+    shutil.copytree('.', snapshot_path + '/code', shutil.ignore_patterns(['.git', '__pycache__']))
 
     logging.basicConfig(filename=snapshot_path+"/log.txt", level=logging.INFO,
                         format='[%(asctime)s.%(msecs)03d] %(message)s', datefmt='%H:%M:%S')
@@ -114,6 +130,7 @@ if __name__ == "__main__":
     logging.info(str(args))
 
     def create_model(name ='vnet'):
+        # Network definition
         if name == 'vnet':
             net = VNet(n_channels=1, n_classes=num_classes, normalization='batchnorm', has_dropout=True)
             model = net.cuda()
@@ -129,7 +146,7 @@ if __name__ == "__main__":
 
     db_train = LA_Heart_Dataset(base_dir=train_data_path,
                                split='train',
-                               train_flod='train0.list',
+                               train_flod='train0.list',                   # todo change training flod
                                common_transform=transforms.Compose([
                                    RandomCrop(patch_size),
                                ]),
@@ -137,8 +154,8 @@ if __name__ == "__main__":
                                    ToTensor(),
                                ]))
 
-    labeled_idxs = list(range(16))
-    unlabeled_idxs = list(range(16, 80))
+    labeled_idxs = list(range(16))  # todo set labeled num
+    unlabeled_idxs = list(range(16, 80))  # todo set labeled num all_sample_num
 
     batch_sampler = TwoStreamBatchSampler(labeled_idxs, unlabeled_idxs, batch_size, batch_size - labeled_bs)
     trainloader = DataLoader(db_train, batch_sampler=batch_sampler, num_workers=4, pin_memory=True,
@@ -184,7 +201,13 @@ if __name__ == "__main__":
             r_outputs1 = r_out1['out']
             v_outputs2 = v_out2['out']
             r_outputs2 = r_out2['out']
+            # torch.Size([4, 2, 112, 112, 80])
+            # torch.Size([4, 2, 112, 112, 80])
+            # print(v_outputs1.shape)
+            # print(r_outputs1.shape)
 
+
+            # First part: Supervised loss
             v_loss_seg1 = F.cross_entropy(v_outputs1[:labeled_bs], s1_label[:labeled_bs])
             v_outputs1_soft = F.softmax(v_outputs1, dim=1)
             v_loss_seg_dice1 = losses.dice_loss(v_outputs1_soft[:labeled_bs, 1, :, :, :], s1_label[:labeled_bs] == 1)
@@ -202,8 +225,9 @@ if __name__ == "__main__":
             r_outputs2_soft = F.softmax(r_outputs2, dim=1)
             r_loss_seg_dice2 = losses.dice_loss(r_outputs2_soft[:labeled_bs, 1, :, :, :], s2_label[:labeled_bs] == 1)
 
-
-            if (0.2 * (v_loss_seg1+v_loss_seg2)+ 1 * (v_loss_seg_dice1 + v_loss_seg_dice2)) < (0.2 * (r_loss_seg1+r_loss_seg2)+ 1 * (r_loss_seg_dice1 + r_loss_seg_dice2)):
+            v_loss_sum=args.alpha*(v_loss_seg1+v_loss_seg2)+(1-args.alpha)*(v_loss_seg_dice1+v_loss_seg_dice2)
+            r_loss_sum=args.alpha*(r_loss_seg1+r_loss_seg2)+(1-args.alpha)*(r_loss_seg_dice1+r_loss_seg_dice2)
+            if  v_loss_sum < r_loss_sum:
                 Good_student = 0
             else:
                 Good_student = 1
@@ -211,9 +235,11 @@ if __name__ == "__main__":
             v_supervised_loss = (v_loss_seg1 + v_loss_seg_dice1 + v_loss_seg2 + v_loss_seg_dice2)/2
             r_supervised_loss = (r_loss_seg1 + r_loss_seg_dice1 + r_loss_seg2 + r_loss_seg_dice2)/2
 
+            # Second part: Consistency loss
             v_cosine_loss = losses.cosine_similarity_loss(v_outputs1 , v_outputs2)
             r_cosine_loss = losses.cosine_similarity_loss(r_outputs1 , r_outputs2)
 
+            # Third part: Unsupervised loss (competitive loss)
             v_outputs2_soft = F.softmax(v_outputs2, dim=1)
             r_outputs2_soft = F.softmax(r_outputs2, dim=1)
 
@@ -231,17 +257,13 @@ if __name__ == "__main__":
 
             consistency_weight = get_current_consistency_weight(iter_num//150)
             if Good_student == 0:
-
                 r_consistency_dist_1_1 = consistency_criterion(r_outputs1_soft[labeled_bs:, :, :, :, :], Plabel1)
                 r_consistency_dist_1_2 = consistency_criterion(r_outputs2_soft[labeled_bs:, :, :, :, :], Plabel2)
-
-
 
                 b, c, w, h, d = r_consistency_dist_1_1.shape
 
                 r_consistency_dist_1_1 = torch.sum(r_consistency_dist_1_1) / (b * c * w * h * d)
                 r_consistency_dist_1_2 = torch.sum(r_consistency_dist_1_2) / (b * c * w * h * d)
-
 
                 r_consistency_loss_1_1 = r_consistency_dist_1_1
                 r_consistency_loss_1_2 = r_consistency_dist_1_2
@@ -253,9 +275,9 @@ if __name__ == "__main__":
                 writer.add_scalar('loss/r_consistency_loss_tatal',r_consistency_loss_total,iter_num)
 
             if Good_student == 1:
-
                 v_consistency_dist_1_1 = consistency_criterion(v_outputs1_soft[labeled_bs:, :, :, :, :], Plabel1)
                 v_consistency_dist_1_2 = consistency_criterion(v_outputs2_soft[labeled_bs:, :, :, :, :], Plabel2)
+
 
                 b, c, w, h, d = v_consistency_dist_1_1.shape
 
@@ -272,11 +294,14 @@ if __name__ == "__main__":
                 r_loss = r_supervised_loss + r_cosine_loss
                 writer.add_scalar('loss/v_consistency_loss_tatal',v_consistency_loss_total,iter_num)
 
-
-
+            # Third part: Unsupervised loss (contrastive loss)
+            # torch.Size([4, 16, 112, 112, 80])
             v_outputs1_pro = v_out1['projector']
+
             r_outputs1_pro = r_out1['projector']
+
             v_outputs2_pro = v_out2['projector']
+
             r_outputs2_pro = r_out2['projector']
 
             loss_contrastive1 = torch.utils.checkpoint.checkpoint(Contrastive_loss,v_outputs1_pro, r_outputs1_pro, v_outputs1, r_outputs1)
@@ -288,58 +313,57 @@ if __name__ == "__main__":
             v_loss = v_loss + loss_contrastive1 + loss_contrastive2 + loss_contrastive3 + loss_contrastive4
             r_loss = r_loss + loss_contrastive1 + loss_contrastive2 + loss_contrastive3 + loss_contrastive4
 
+
+            # ----------------------------------------------------------
             if (torch.any(torch.isnan(v_loss)) or torch.any(torch.isnan(r_loss)) ):
                 print('nan find')
             vnet_optimizer.zero_grad()
             resnet_optimizer.zero_grad()
-
+            # print(v_loss1)
+            # print(v_loss2)
             v_loss.backward(retain_graph=True)
             r_loss.backward()
             vnet_optimizer.step()
             resnet_optimizer.step()
             writer.add_scalar('lr', lr_, iter_num)
-
             writer.add_scalar('loss/v_loss_seg1', v_loss_seg1, iter_num)
             writer.add_scalar('loss/v_loss_seg_dice1', v_loss_seg_dice1, iter_num)
             writer.add_scalar('loss/v_loss_seg2', v_loss_seg2, iter_num)
             writer.add_scalar('loss/v_loss_seg_dice2', v_loss_seg_dice2, iter_num)
-            writer.add_scalar('loss/v_cosine_loss', v_cosine_loss, iter_num)
+            # writer.add_scalar('loss/v_cosine_loss', v_cosine_loss, iter_num)
             writer.add_scalar('loss/v_supervised_loss', v_supervised_loss, iter_num)
-            writer.add_scalar('loss/loss_contrastive1', loss_contrastive1, iter_num)
-            writer.add_scalar('loss/loss_contrastive2', loss_contrastive2, iter_num)
-            writer.add_scalar('loss/loss_contrastive3', loss_contrastive3, iter_num)
-            writer.add_scalar('loss/loss_contrastive4', loss_contrastive4, iter_num)
+            # writer.add_scalar('loss/loss_contrastive1', loss_contrastive1, iter_num)
+            # writer.add_scalar('loss/loss_contrastive2', loss_contrastive2, iter_num)
+            # writer.add_scalar('loss/loss_contrastive3', loss_contrastive3, iter_num)
+            # writer.add_scalar('loss/loss_contrastive4', loss_contrastive4, iter_num)
             writer.add_scalar('loss/', v_loss, iter_num)
 
             writer.add_scalar('loss/r_loss_seg1', r_loss_seg1, iter_num)
             writer.add_scalar('loss/r_loss_seg_dice1', r_loss_seg_dice1, iter_num)
             writer.add_scalar('loss/r_loss_seg2', r_loss_seg2, iter_num)
             writer.add_scalar('loss/r_loss_seg_dice2', r_loss_seg_dice2, iter_num)
-            writer.add_scalar('loss/r_cosine_loss', r_cosine_loss, iter_num)
+            # writer.add_scalar('loss/r_cosine_loss', r_cosine_loss, iter_num)
             writer.add_scalar('loss/r_supervised_loss', r_supervised_loss, iter_num)
 
             writer.add_scalar('loss/r_loss', r_loss, iter_num)
             writer.add_scalar('train/Good_student', Good_student, iter_num)
 
             logging.info(
-                'iteration ： %d v_supervised_loss : %f v_loss_seg1 : %f v_loss_seg_dice1 : %f v_loss_seg2 : %f v_loss_seg_dice2 : %f r_supervised_loss : %f r_loss_seg1 : %f r_loss_seg_dice1 : %f r_loss_seg2 : %f r_loss_seg_dice2 : %f loss_contrastive1: %f loss_contrastive2: %f v_loss: %f r_loss: %f Good_student: %f ' %
+                'iteration ： %d v_supervised_loss : %f v_loss_seg1 : %f v_loss_seg_dice1 : %f v_loss_seg2 : %f v_loss_seg_dice2 : %f r_supervised_loss : %f r_loss_seg1 : %f r_loss_seg_dice1 : %f r_loss_seg2 : %f r_loss_seg_dice2 : %f  v_loss: %f r_loss: %f Good_student: %f ' %
                 (iter_num,
                  v_supervised_loss.item(), v_loss_seg1.item(), v_loss_seg_dice1.item(), v_loss_seg2.item(),
                  v_loss_seg_dice2.item(),
                  r_supervised_loss.item(), r_loss_seg1.item(), r_loss_seg_dice1.item(), r_loss_seg2.item(),
-                 r_loss_seg_dice2.item(), loss_contrastive1.item(), loss_contrastive2.item(), v_loss.item(),
+                 r_loss_seg_dice2.item(), v_loss.item(),
                  r_loss.item(), Good_student))
 
+            ## change lr
             if iter_num % 2500 == 0 and iter_num != 0:
                 lr_ = lr_ * 0.1
                 for param_group in vnet_optimizer.param_groups:
                     param_group['lr'] = lr_
                 for param_group in resnet_optimizer.param_groups:
                     param_group['lr'] = lr_
-
-            # if iter_num % 10 == 0:
-
-
 
             if iter_num >= max_iterations:
                 break
@@ -348,11 +372,11 @@ if __name__ == "__main__":
             iter_num = iter_num + 1
             if iter_num >= max_iterations:
                 break
+        print('epoch',epoch_num,' time:',time.time()-time2)
+
 
         if iter_num >= max_iterations:
             break
-
-
     save_mode_path_vnet = os.path.join(snapshot_path, 'vnet_iter_' + str(max_iterations) + '.pth')
     torch.save(model_vnet.state_dict(), save_mode_path_vnet)
     logging.info("save model to {}".format(save_mode_path_vnet))

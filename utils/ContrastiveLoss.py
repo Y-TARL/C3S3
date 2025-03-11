@@ -57,16 +57,12 @@ class ContrastiveLoss(nn.Module):
         B, C, *spatial_size = v_outputs1_pro.shape  # N = H * W * D
         spatial_dims = len(spatial_size)
 
-        #特征图 v_outputs1_pro 和 r_outputs1_pro 进行归一化处理
+        # Normalize the feature maps v_outputs1_pro and r_outputs1_pro
         norm_v_pro = F.normalize(v_outputs1_pro.permute(0, *list(range(2, 2 + spatial_dims)), 1).reshape(-1, C), dim=-1)
         norm_r_pro = F.normalize(r_outputs1_pro.permute(0, *list(range(2, 2 + spatial_dims)), 1).reshape(-1, C), dim=-1)
-        # norm_v_pro = F.normalize(v_outputs1_pro.permute(0, *list(range(2, 2 + spatial_dims)), 1).reshape(B,-1, C), dim=-1)
-        # norm_r_pro = F.normalize(r_outputs1_pro.permute(0, *list(range(2, 2 + spatial_dims)), 1).reshape(B,-1, C), dim=-1)
-        #   图片大小一样的特征 ->
 
-        # sim_matrix = F.cosine_similarity(norm_v_pro.unsqueeze(0), norm_r_pro.unsqueeze(1), dim=2)
 
-        #为每个像素生成一个伪标签，用于确定其前景或背景归属。
+        # Generate a pseudo label for each pixel to determine its foreground or background assignment.
         v_max_probs, v_pseudo_lable = torch.softmax(v_outputs1, dim=1).max(dim=1)
         r_max_probs, r_pseudo_lable = torch.softmax(r_outputs1, dim=1).max(dim=1)
 
@@ -80,29 +76,13 @@ class ContrastiveLoss(nn.Module):
         r_1_mask = (r_pseudo_lable == 1)
 
         intersection_mask = v_1_mask & r_1_mask
-        # intersection_mask = intersection_mask.view(2007040).to(torch.float32)
         intersection_mask = intersection_mask.view(-1).to(torch.float32)
-        # intersection_mask = intersection_mask.view(B,-1).to(torch.float32)
 
         union_mask = v_1_mask | r_1_mask
-        # union_mask = union_mask.view(2007040).to(torch.float32)
         union_mask = union_mask.view(-1).to(torch.float32)
-        # union_mask = union_mask.view(B,-1).to(torch.float32)
 
-        # sim_matrix = F.cosine_similarity(norm_v_pro, norm_r_pro, dim=-1)
-        # nominator1 = torch.exp(intersection_mask * sim_matrix / self.tau)
-        # denominator1 = torch.exp((1-intersection_mask) * sim_matrix / self.tau).sum(dim=0) + nominator1
-        #
-        # negative_sim_matrix = torch.exp(
-        #     (1 - intersection_mask) * F.cosine_similarity(norm_v_pro.unsqueeze(0), norm_r_pro.unsqueeze(1),dim=-1) / self.tau)
-        # denominator1 = negative_sim_matrix.sum(dim=-1) + nominator1
-        #
-        # loss1 = -torch.log(nominator1 / (denominator1 + 1e-8)).mean()
-        # nominator2 = torch.exp((1-union_mask) * sim_matrix / self.tau)
-        # denominator2 = torch.exp(union_mask * sim_matrix / self.tau).sum(dim=0) + nominator2
-        # loss2 = -torch.log(nominator2 / (denominator2 + 1e-8)).mean()
 
-        sim_matrix = F.cosine_similarity(norm_v_pro, norm_r_pro, dim=-1) #展平了已经
+        sim_matrix = F.cosine_similarity(norm_v_pro, norm_r_pro, dim=-1) 
         neg_sim_matrix = torch.exp(F.cosine_similarity((intersection_mask * norm_v_pro).unsqueeze(0),
                                  (1 - intersection_mask * norm_r_pro).unsqueeze(1), dim=-1) / self.tau)
         nominator1 = torch.exp(intersection_mask * sim_matrix / self.tau)
