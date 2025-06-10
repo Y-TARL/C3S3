@@ -27,13 +27,18 @@ To tackle this issue, we introduce **C3S3**, a novel semi-supervised segmentatio
    - Dedicated to refining boundary localization
    - Spatial Position Binary Masking
    - Dual-Space Intersection-Union Loss
+
 2. **Dynamic Complementary Competition (DCC)** ⚡
 
    - Leverages two high-performing sub-networks
    - Generates high-quality pseudo-labels
    - Minimizes reliance between student and teacher networks
 
-![Contrastive Learning](Figure/contrastive_figure_final.png)
+#### ODCL Module Details
+
+![ODCL Contrastive Learning](Figure/contrastive_figure_final.png)
+
+*Figure: Detailed illustration of the Outcome-Driven Contrastive Learning (ODCL) module, showing the spatial position binary masking and dual-space intersection-union loss mechanism for boundary refinement.*
 
 ### 📊 Performance Highlights
 
@@ -108,7 +113,7 @@ To tackle this issue, we introduce **C3S3**, a novel semi-supervised segmentatio
   <img src="Figure/MCF.gif" alt="MCF" width="13%">
   <img src="Figure/CauSSL.gif" alt="CauSSL" width="13%">
   <img src="Figure/TraCoCo.gif" alt="TraCoCo" width="13%">
-  <img src="Figure/ours.gif" alt="C3S3 (Ours)" width="13%">
+  <img src="Figure/C3S3.gif" alt="C3S3 (Ours)" width="13%">
   <img src="Figure/GT.gif" alt="Ground Truth" width="13%">
 </div>
 
@@ -148,14 +153,14 @@ conda activate c3s3
 # Install PyTorch (CUDA 12.1 recommended)
 pip install torch==2.2.1 torchvision==0.17.1 torchaudio==2.2.1 --index-url https://download.pytorch.org/whl/cu121
 
-# Install all other dependencies
-pip install -r requirements.txt
-
-# Alternative: Install core dependencies individually
+# Install other required packages
 pip install numpy==1.21.5 scipy==1.10.1 scikit-learn==1.3.2 pandas==2.0.3
 pip install SimpleITK==2.3.1 MedPy==0.4.0 nibabel==5.2.1
 pip install scikit-image==0.21.0 opencv-python==4.9.0.80
 pip install tensorboardX==2.6.2.2 tqdm==4.66.2 wandb==0.18.7
+
+# Install additional dependencies
+pip install -r requirements.txt
 ```
 
 ### Dataset Preparation
