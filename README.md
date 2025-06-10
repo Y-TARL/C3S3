@@ -197,10 +197,9 @@ dataset/
 
 ```bash
 # Train on LA dataset (20% labeled data)
-python train_LA.py --exp LA_20percent --max_iterations 2500 --gpu 0 --alpha 0.8 --consistency 0.1
-
+python train_LA.py --exp LA_20percent --max_iterations 2500 --gpu 0 --alpha 0.8 
 # Train on Pancreas-CT dataset (20% labeled data)
-python train_Pancreas.py --exp Pancreas_20percent --max_iterations 2500 --gpu 0 --alpha 0.5 --consistency 0.1
+python train_Pancreas.py --exp Pancreas_20percent --max_iterations 2500 --gpu 0 --alpha 0.5
 ```
 
 ### Testing
@@ -309,7 +308,7 @@ Based on our rebuttal materials, here's the complete ablation analysis:
 - **Batch Size**: 2 (1 labeled + 1 unlabeled)
 - **Augmentation**: Random rotation, flip, crop
 - **Iterations**: 2500 for both datasets
-
+- **consistency weight**: 0.1 for LA, 0.5 for Pancreas-CT
 ## 📚 Citation
 
 If you find this work useful for your research, please cite:
