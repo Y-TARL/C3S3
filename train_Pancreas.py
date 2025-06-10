@@ -26,7 +26,7 @@ from dataloaders.Pancreas_Data import Pancreas, RandomCrop, ToTensor, TwoStreamB
 parser = argparse.ArgumentParser()
 parser.add_argument('--root_path', type=str, default='../dataset/Pancreas/Pancreas-CT/', help='Name of Experiment')
 parser.add_argument('--exp', type=str, default="Pa_norm_5alpha", help='model_name')
-parser.add_argument('--max_iterations', type=int, default=15000, help='maximum epoch number to train')
+parser.add_argument('--max_iterations', type=int, default=2500, help='maximum epoch number to train')
 parser.add_argument('--batch_size', type=int, default=2, help='batch_size per gpu')
 parser.add_argument('--labeled_bs', type=int, default=1, help='labeled_batch_size per gpu')
 parser.add_argument('--base_lr', type=float, default=0.01, help='maximum epoch number to train')

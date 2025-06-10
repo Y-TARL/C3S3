@@ -32,7 +32,7 @@ parser.add_argument('--base_lr', type=float, default=0.01, help='maximum epoch n
 parser.add_argument('--deterministic', type=int, default=1, help='whether use deterministic training')
 parser.add_argument('--seed', type=int, default=1337, help='random seed')
 parser.add_argument('--gpu', type=str, default='0', help='GPU to use')
-parser.add_argument('--alpha', type=float, default=0.2, help='alpha')
+parser.add_argument('--alpha', type=float, default=0.8, help='alpha')
 # costs
 parser.add_argument('--ema_decay', type=float, default=0.999, help='ema_decay')
 
