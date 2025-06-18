@@ -316,14 +316,11 @@ Based on our rebuttal materials, here's the complete ablation analysis:
 If you find this work useful for your research, please cite:
 
 ```bibtex
-@misc{he2025c3s3complementarycompetitioncontrastive,
-      title={C3S3: Complementary Competition and Contrastive Selection for Semi-Supervised Medical Image Segmentation}, 
-      author={Jiaying He and Yitong Lin and Jiahe Chen and Honghui Xu and Jianwei Zheng},
-      year={2025},
-      eprint={2506.07368},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2506.07368}, 
+@article{he2025c3s3,
+  title={C3S3: Complementary Competition and Contrastive Selection for Semi-Supervised Medical Image Segmentation},
+  author={He, Jiaying and Lin, Yitong and Chen, Jiahe and Xu, Honghui and Zheng, Jianwei},
+  journal={arXiv preprint arXiv:2506.07368},
+  year={2025}
 }
 ```
 
