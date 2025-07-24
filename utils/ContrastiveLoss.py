@@ -81,18 +81,16 @@ class ContrastiveLoss(nn.Module):
         union_mask = v_1_mask | r_1_mask
         union_mask = union_mask.view(-1).to(torch.float32)
 
+        sim_matrix = F.cosine_similarity(norm_v_pro, norm_r_pro, dim=-1)
 
-        sim_matrix = F.cosine_similarity(norm_v_pro, norm_r_pro, dim=-1) 
-        neg_sim_matrix = torch.exp(F.cosine_similarity((intersection_mask * norm_v_pro).unsqueeze(0),
-                                 (1 - intersection_mask * norm_r_pro).unsqueeze(1), dim=-1) / self.tau)
         nominator1 = torch.exp(intersection_mask * sim_matrix / self.tau)
-        denominator1 = neg_sim_matrix.sum(dim=-1)+ nominator1
+        denominator1 = torch.exp(
+            (1-intersection_mask) * sim_matrix / self.tau).sum(dim=0) + nominator1
         loss1 = -torch.log(nominator1 / (denominator1 + 1e-8)).mean()
 
         nominator2 = torch.exp((1-union_mask) * sim_matrix / self.tau)
-        neg_sim_matrix = torch.exp(F.cosine_similarity( (1-union_mask * norm_v_pro).unsqueeze(0),
-                                 (union_mask * norm_r_pro).unsqueeze(1), dim=-1) / self.tau)
-        denominator2 = neg_sim_matrix.sum(dim=-1) + nominator2
+        denominator2 = torch.exp(
+            union_mask * sim_matrix / self.tau).sum(dim=0) + nominator2
         loss2 = -torch.log(nominator2 / (denominator2 + 1e-8)).mean()
 
         loss = loss1 + loss2
